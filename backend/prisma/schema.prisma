@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//
+// --------------------
+// User Model
+// --------------------
+model User {
+  id               Int                       @id @default(autoincrement())
+  fullName         String
+  email            String                    @unique
+  password         String
+  bio              String                    @default("")
+  profilePic       String                    @default("")
+  nativeLanguage   String                    @default("")
+  learningLanguage String                    @default("")
+  location         String                    @default("")
+  isOnboarded      Boolean                   @default(false)
+  lastSeen         DateTime?   // <----- ADD THIS
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  // Relationships
+  sentRequests     FriendRequest[]           @relation("SentRequests")
+  receivedRequests FriendRequest[]           @relation("ReceivedRequests")
+  friends          User[]                    @relation("UserFriends")
+  friendOf         User[]                    @relation("UserFriends")
+  callCaller    Call[]                    @relation("CallCaller")
+  callReceiver  Call[]                    @relation("CallReceiver")
+
+  conversationParticipants ConversationParticipant[]
+  messages         Message[]                 @relation("UserMessages")
+  reactions        Reaction[]                @relation("UserReactions")
+}
+
+//
+// --------------------
+// Friend Requests
+// --------------------
+model FriendRequest {
+  id          Int                  @id @default(autoincrement())
+  sender      User                 @relation("SentRequests", fields: [senderId], references: [id])
+  senderId    Int
+  recipient   User                 @relation("ReceivedRequests", fields: [recipientId], references: [id])
+  recipientId Int
+  status      FriendRequestStatus  @default(pending)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+}
+
+enum FriendRequestStatus {
+  pending
+  accepted
+}
+
+//
+// --------------------
+// Conversations
+// --------------------
+model Conversation {
+  id            Int                        @id @default(autoincrement())
+  createdAt     DateTime                   @default(now())
+
+  participants  ConversationParticipant[]
+  messages      Message[]
+  calls         Call[]
+
+}
+
+//
+// --------------------
+// ConversationParticipant (NEW)
+// --------------------
+model ConversationParticipant {
+  id              Int           @id @default(autoincrement())
+  chatMode        ChatMode      @default(BRIDGE)
+
+  userId          Int
+  conversationId  Int
+
+  user            User          @relation(fields: [userId], references: [id])
+  conversation    Conversation  @relation(fields: [conversationId], references: [id])
+
+  // ✅ NEW FIELD
+  lastReadMessageId Int?   // nullable → if null, means no messages read yet
+  unreadCount        Int          @default(0) // ✅ NEW FIELD
+  @@unique([userId, conversationId])
+}
+
+enum ChatMode {
+  LEARNING
+  COMFORT
+  BRIDGE
+}
+
+//
+// --------------------
+// Messages
+// --------------------
+model Message {
+  id                     Int           @id @default(autoincrement())
+  text                   String?
+  mediaUrl               String?       // Cloudinary URL if media exists
+  mediaType              MediaType?    // IMAGE, VIDEO, FILE
+  translatedToNative     String?       // For Comfort Mode
+  translatedToLearning   String?       // For Learning Mode
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  deleted                Boolean       @default(false)
+  edited                 Boolean       @default(false)
+
+  // NEW FIELD → for call-related system messages
+  isCallSystem           Boolean       @default(false)
+
+  // Sender
+  sender          User          @relation("UserMessages", fields: [senderId], references: [id])
+  senderId        Int
+
+  // Conversation
+  conversation    Conversation  @relation(fields: [conversationId], references: [id])
+  conversationId  Int
+
+  // Replies
+  repliedTo       Message?      @relation("MessageReplies", fields: [repliedToId], references: [id])
+  repliedToId     Int?
+  replies         Message[]     @relation("MessageReplies")
+
+  // Reactions
+  reactions       Reaction[]
+
+  //status
+  status          MessageStatus  @default(SENT)
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+}
+enum MediaType {
+  IMAGE
+  VIDEO
+  FILE
+}
+//
+// --------------------
+// Reactions
+// --------------------
+model Reaction {
+  id        Int      @id @default(autoincrement())
+  emoji     String   // e.g. "👍", "😂"
+  createdAt DateTime @default(now())
+
+  user      User     @relation("UserReactions", fields: [userId], references: [id])
+  userId    Int
+
+  message   Message  @relation(fields: [messageId], references: [id])
+  messageId Int
+}
+
+
+
+
+// --------------------
+//call model
+// --------------------
+
+model Call {
+  id             Int          @id @default(autoincrement())
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversationId Int
+
+  caller   User @relation("CallCaller", fields: [callerId], references: [id])
+  callerId Int
+
+  receiver   User @relation("CallReceiver", fields: [receiverId], references: [id])
+  receiverId Int
+
+  status     CallStatus @default(RINGING)
+
+  // Fix: these should be nullable (only set when accepted / ended)
+  startedAt  DateTime? 
+  endedAt    DateTime?
+  duration   Int?       // duration in seconds, computed when ended
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+enum CallStatus {
+  RINGING
+  ONGOING
+  ENDED
+  REJECTED
+  MISSED
+}
