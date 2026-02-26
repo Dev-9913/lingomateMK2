@@ -10,9 +10,13 @@ import {
 
 const userSocketMap = {}; // { userId: socketId }
 
+// =======================
+// ONLINE USER HELPERS
+// =======================
 /**
  * Get the socketId for a user
  */
+
 export const getReceiverSocketId = (userId) => {
   return userSocketMap[userId];
 };
@@ -22,10 +26,22 @@ export const getReceiverSocketId = (userId) => {
 export const getOnlineUsers = () => {
   return Object.keys(userSocketMap).map((id) => parseInt(id, 10));
 };
-export const initSocket = (server) => {
+
+// =======================
+// SOCKET INITIALIZATION
+// =======================
+
+let ioInstance = null;
+
+export const initSocket = (server, allowedOrigins) => {
   const io = new Server(server, {
-    cors: { origin: process.env.CLIENT_URL, credentials: true },
+    cors: {
+      origin: allowedOrigins,
+      credentials: true,
+    },
   });
+
+  ioInstance = io;
 
   io.on("connection", (socket) => {
     console.log("✅ User connected:", socket.id);
@@ -35,6 +51,8 @@ export const initSocket = (server) => {
     console.log("User ID from handshake:", rawId);
 
     const userId = rawId ? parseInt(rawId, 10) : null;
+
+    console.log("User ID from handshake:", rawId);
     console.log("Parsed userId:", userId);
 
     if (userId) {
@@ -45,20 +63,23 @@ export const initSocket = (server) => {
         userId,
         isOnline: true,
       });
+
       io.emit("onlineUsers", getOnlineUsers());
     }
 
-    // ==================================================
-    // 🟢 JOIN CONVERSATION
-    // ==================================================
+    // =======================
+    // JOIN CONVERSATION
+    // =======================
+
     socket.on("joinConversation", ({ conversationId }) => {
       socket.join(`conversation_${conversationId}`);
       console.log(`User ${userId} joined conversation_${conversationId}`);
     });
 
-    // ==================================================
-    // ✉️ MESSAGE DELIVERY
-    // ==================================================
+    // =======================
+    // MESSAGE DELIVERY
+    // =======================
+
     socket.on("message_delivered", async ({ messageId, conversationId }) => {
       try {
         // 1) Mark message in DB as DELIVERED
@@ -81,17 +102,19 @@ export const initSocket = (server) => {
       }
     });
 
-    // ==================================================
-    // ⌨️ TYPING INDICATOR
-    // ==================================================
+    // =======================
+    // TYPING INDICATOR
+    // =======================
+
     socket.on("typing", ({ conversationId, isTyping }) => {
       socket
         .to(`conversation_${conversationId}`)
         .emit("typing", { userId, isTyping });
     });
-    // ==================================================
-    // 🔥 VIDEO CALL HANDLERS
-    // ==================================================
+
+    // =======================
+    // VIDEO CALL EVENTS
+    // =======================
 
     // Caller initiates call
     socket.on("call-user", async ({ conversationId, receiverId }) => {
@@ -138,9 +161,10 @@ export const initSocket = (server) => {
       }
     });
 
-    // ==================================================
-    // 📡 WebRTC SIGNALING EVENTS
-    // ==================================================
+    // =======================
+    // WEBRTC SIGNALING
+    // =======================
+
     socket.on("webrtc-offer", ({ receiverId, sdp }) => {
       console.log(`📤 webrtc-offer → from ${userId} to ${receiverId}`);
       const receiverSocketId = getReceiverSocketId(receiverId);
@@ -179,11 +203,13 @@ export const initSocket = (server) => {
       }
     });
 
-    // ==================================================
-    // 🔴 DISCONNECT HANDLER
-    // ==================================================
+    // =======================
+    // DISCONNECT HANDLER
+    // =======================
+
     socket.on("disconnect", async () => {
       console.log("❌ Disconnected:", socket.id);
+
       delete userSocketMap[userId];
       io.emit("onlineUsers", getOnlineUsers());
 
@@ -195,6 +221,7 @@ export const initSocket = (server) => {
         });
 
         const lastSeen = new Date();
+
         try {
           await prisma.user.update({
             where: { id: parseInt(userId, 10) },
@@ -218,26 +245,29 @@ export const initSocket = (server) => {
               status: "RINGING",
             },
           });
-          for (const c of activeCalls)
+
+          for (const c of activeCalls) {
             await markMissedCall({
               callId: c.id,
               receiverId: c.receiverId,
             });
+          }
         } catch (err) {
           console.error("disconnect call cleanup:", err);
         }
       }
     });
-  }); // ✅ closed connection handler
+  });
 
   // Store IO instance globally for use inside services
   setIOInstance(io);
   return io;
 };
 
-// ==================================================
-// 🧩 GLOBAL IO ACCESSOR
-// ==================================================
-let ioInstance;
-export const setIOInstance = (io) => (ioInstance = io);
+// global IO instance setters/getters
+
+export const setIOInstance = (io) => {
+  ioInstance = io;
+};
+
 export const getIOInstance = () => ioInstance;

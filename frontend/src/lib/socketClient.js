@@ -2,7 +2,12 @@
 import { io } from "socket.io-client";
 
 let socket = null;
-let refCounter = 0; // Reference counter
+let refCounter = 0;
+const getSocketURL = () => {
+  return import.meta.env.MODE === "development"
+    ? "http://localhost:7000"
+    : window.location.origin;
+};
 
 export const initializeSocket = (userId) => {
   if (socket) {
@@ -12,7 +17,7 @@ export const initializeSocket = (userId) => {
   }
 
   console.log("[Socket] Creating new persistent socket connection...");
-  const baseURL = "http://localhost:7000"; // Ensure this port is correct
+const baseURL = getSocketURL();
 
   socket = io(baseURL, {
     query: { userId },
@@ -66,4 +71,4 @@ export const forceDisconnectSocket = () => {
         socket = null;
         refCounter = 0;
     }
-}
+};
