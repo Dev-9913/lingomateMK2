@@ -52,13 +52,17 @@ app.use("/api/messages", messageRoutes);
 
 // Serve frontend in production
 
-if (process.env.NODE_ENV === "production") {
-  const frontendPath = path.join(__dirname, "../../frontend/dist");
 
-  app.use(express.static(frontendPath));
+if (process.env.NODE_ENV === "production") {
+  const frontendDistPath = path.resolve(
+    __dirname,
+    "../../frontend/dist"
+  );
+
+  app.use(express.static(frontendDistPath));
 
   app.get("*", (req, res) => {
-    res.sendFile(path.join(frontendPath, "index.html"));
+    res.sendFile(path.join(frontendDistPath, "index.html"));
   });
 }
 
