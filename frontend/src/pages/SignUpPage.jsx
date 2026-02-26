@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Globe } from "lucide-react";
 import { Link } from "react-router";
-import useSignUp from "../hooks/useSignup";
+import useSignUp from "../hooks/useSignUp";
 
 
 
