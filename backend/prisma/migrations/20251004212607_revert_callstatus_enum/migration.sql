@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Call" ALTER COLUMN "startedAt" DROP NOT NULL,
+ALTER COLUMN "startedAt" DROP DEFAULT;
