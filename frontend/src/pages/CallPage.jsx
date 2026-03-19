@@ -2,7 +2,17 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router";
 import toast from "react-hot-toast";
 import useAuthUser from "../hooks/useAuthUser";
-import { useSocket } from "../hooks/useSocket"; // Corrected hook import
+import { useSocket } from "../hooks/useSocket";
+
+import {
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  Monitor,
+  MonitorOff,
+  PhoneOff,
+} from "lucide-react";
 
 const CallPage = () => {
   const { authUser } = useAuthUser();
@@ -21,6 +31,7 @@ const CallPage = () => {
 
   const [localStream, setLocalStream] = useState(null);
   const [screenStream, setScreenStream] = useState(null);
+
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
@@ -29,6 +40,9 @@ const CallPage = () => {
   // Store callbacks in refs to use stable versions in useEffect cleanup/handlers
   const streamCleanupRef = useRef();
   const handleEndCallRef = useRef();
+
+  const log = (...args) =>
+    console.log(`[CallPage:${isCaller ? "Caller" : "Receiver"}]`, ...args);
 
   const streamCleanup = useCallback(() => {
     console.log("[WebRTC] Cleaning up streams...");
@@ -44,14 +58,17 @@ const CallPage = () => {
       peerRef.current = null;
       console.log("[WebRTC] Peer connection closed.");
     }
+
     toast("Call has ended.");
+
     if (window.opener && !window.closed) {
       window.close();
     }
+
     setTimeout(() => {
         if (!window.closed && window.location.pathname.includes('/call/')) { // Check if still on call page
-            navigate(`/chat/${conversationId}`);
-        }
+        navigate(`/chat/${conversationId}`);
+      }
     }, 100);
   }, [conversationId, navigate]);
 
@@ -81,7 +98,10 @@ const CallPage = () => {
     // Prevent re-initialization
     if (peerRef.current) return;
 
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    });
+
     peerRef.current = pc;
     console.log("[WebRTC] PC created.");
 
@@ -141,11 +161,11 @@ const CallPage = () => {
       try {
         log("Setting remote description (offer)...");
         // ✅ FIX: Use the full SDP object received
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
         log("Creating ANSWER...");
-        const answer = await pc.createAnswer();
+      const answer = await pc.createAnswer();
         log("Setting local description (answer)...");
-        await pc.setLocalDescription(answer);
+      await pc.setLocalDescription(answer);
         log("📤 Sending ANSWER to", senderId);
         // ✅ FIX: Send the full localDescription object
         socket.emit("webrtc-answer", { sdp: pc.localDescription, receiverId: senderId });
@@ -158,7 +178,7 @@ const CallPage = () => {
       try {
         log("Setting remote description (answer)...");
          // ✅ FIX: Use the full SDP object received
-        await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
       } catch (err) { log("Error handling answer:", err); handleEndCallRef.current() }
     };
 
@@ -171,7 +191,7 @@ const CallPage = () => {
          return;
       }
       try {
-        await pc.addIceCandidate(candidate);
+      await pc.addIceCandidate(candidate);
         log("Added received ICE candidate.");
       } catch (err) { console.error("Error adding ICE candidate:", err) }
     };
@@ -187,13 +207,13 @@ const CallPage = () => {
     const initiateCall = async () => {
       if (isCaller) {
         log("Caller starting initiation...");
-        const stream = await setupMedia();
+      const stream = await setupMedia();
         if (!stream || !peerRef.current) return;
         try {
           log("Creating OFFER...");
-          const offer = await pc.createOffer();
+      const offer = await pc.createOffer();
           log("Setting local description (offer)...");
-          await pc.setLocalDescription(offer);
+      await pc.setLocalDescription(offer);
           log("📤 Sending OFFER to", peerId);
           // ✅ FIX: Send the full localDescription object
           socket.emit("webrtc-offer", { sdp: pc.localDescription, receiverId: peerId });
@@ -212,8 +232,8 @@ const CallPage = () => {
       socket.off("callEnded", handleEndCallRef.current); // Use ref
       if (streamCleanupRef.current) streamCleanupRef.current(); // Use ref
       if (peerRef.current) {
-          peerRef.current.close();
-          peerRef.current = null;
+        peerRef.current.close();
+        peerRef.current = null;
           log("Peer connection closed in cleanup.");
       }
     };
@@ -222,9 +242,9 @@ const CallPage = () => {
 
 
   // --- UI Control Toggles --- (Mostly Unchanged) ---
-  const toggleMute = () => { 
+  const toggleMute = () => {
     localStream?.getAudioTracks().forEach((t) => (t.enabled = !t.enabled));setIsMuted((p) => !p);
-    };
+  };
 
   const toggleCamera = () => {
     localStream?.getVideoTracks().forEach((t) => (t.enabled = !t.enabled));
@@ -233,8 +253,13 @@ const CallPage = () => {
 
   const stopScreenShare = useCallback(() => {
     if (!localStream) return;
+
+    const sender = peerRef.current
+      ?.getSenders()
+      .find((s) => s.track?.kind === "video");
+
     const videoTrack = localStream.getVideoTracks()[0];
-    const sender = peerRef.current?.getSenders().find((s) => s.track?.kind === "video");
+
     if (sender && videoTrack) {
         log("Reverting to camera track.");
         sender.replaceTrack(videoTrack).catch(err => log("Error replacing track:", err));
@@ -244,51 +269,98 @@ const CallPage = () => {
     setIsScreenSharing(false);
   }, [localStream, screenStream]);
 
-   const toggleScreenShare = async () => {
+  const toggleScreenShare = async () => {
     if (!isScreenSharing) {
       try {
-        const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const sender = peerRef.current?.getSenders().find((s) => s.track?.kind === "video");
+        const screen = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+        });
+
+        const sender = peerRef.current
+          ?.getSenders()
+          .find((s) => s.track?.kind === "video");
+
         if (sender) sender.replaceTrack(screen.getVideoTracks()[0]);
-        screen.getVideoTracks()[0].onended = () => stopScreenShare();
+
+        screen.getVideoTracks()[0].onended = stopScreenShare;
+
         setScreenStream(screen);
         setIsScreenSharing(true);
       } catch (err) {
         console.error("Error sharing screen:", err);
         toast.error("Could not start screen sharing.");
       }
-    } else stopScreenShare();
+    } else {
+      stopScreenShare();
+    }
   };
 
   // Helper log function for context
-  const log = (...args) => console.log(`[CallPage:${isCaller ? "Caller" : "Receiver"}]`, ...args);
+  //const log = (...args) => console.log(`[CallPage:${isCaller ? "Caller" : "Receiver"}]`, ...args);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white relative">
-      <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover bg-black" onError={(e) => log("Remote video error:", e)} />
+    <div className="relative w-screen h-screen bg-black flex flex-col overflow-hidden">
+
+      {/* Remote Video */}
+      <div className="flex-1 flex items-center justify-center">
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          className="max-w-full max-h-full object-contain"
+        />
+      </div>
+
+      {/* Local Video */}
       <video
         ref={localVideoRef}
         autoPlay
         playsInline
         muted
-        className="absolute bottom-24 md:bottom-6 right-6 w-48 md:w-1/4 rounded-lg border-2 border-white shadow-lg bg-black"
-        onError={(e) => log("Local video error:", e)}
+        className="absolute bottom-28 right-4 w-32 h-24 md:w-48 md:h-32 object-cover rounded-lg border border-white shadow-lg"
       />
-      <div className="absolute bottom-6 flex flex-wrap justify-center gap-4 p-2 bg-black bg-opacity-50 rounded-lg">
-        {/* Buttons unchanged */}
-        <button onClick={toggleMute} className={`btn btn-circle ${isMuted ? 'btn-error' : 'btn-secondary'}`}>{isMuted ? "Unmute" : "Mute"}</button>
-        <button onClick={toggleCamera} className={`btn btn-circle ${isCameraOff ? 'btn-error' : 'btn-secondary'}`}>{isCameraOff ? "Cam On" : "Cam Off"}</button>
-        <button onClick={toggleScreenShare} className="btn btn-circle btn-primary">{isScreenSharing ? "Stop" : "Share"}</button>
-        <button
-          onClick={() => {
+
+      {/* Controls */}
+      <div className="absolute bottom-4 w-full flex justify-center">
+        <div className="flex gap-4 bg-black/60 backdrop-blur-md px-4 py-3 rounded-full">
+
+          <button
+            onClick={toggleMute}
+            className={`btn btn-circle ${isMuted ? "btn-error" : "btn-secondary"}`}
+            title={isMuted ? "Unmute" : "Mute"}
+          >
+            {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+          </button>
+
+          <button
+            onClick={toggleCamera}
+            className={`btn btn-circle ${isCameraOff ? "btn-error" : "btn-secondary"}`}
+            title={isCameraOff ? "Turn Camera On" : "Turn Camera Off"}
+          >
+            {isCameraOff ? <VideoOff size={18} /> : <Video size={18} />}
+          </button>
+
+          <button
+            onClick={toggleScreenShare}
+            className="btn btn-circle btn-primary"
+            title={isScreenSharing ? "Stop Screen Share" : "Share Screen"}
+          >
+            {isScreenSharing ? <MonitorOff size={18} /> : <Monitor size={18} />}
+          </button>
+
+          <button
+            onClick={() => {
             log("End Call button clicked.");
-            socket.emit("end-call", { callId });
+              socket.emit("end-call", { callId });
             handleEndCallRef.current(); // Use ref
-          }}
-          className="btn btn-circle btn-error"
-        >
-          End
-        </button>
+            }}
+            className="btn btn-circle btn-error"
+            title="End Call"
+          >
+            <PhoneOff size={18} />
+          </button>
+
+        </div>
       </div>
     </div>
   );
