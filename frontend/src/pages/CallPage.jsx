@@ -272,34 +272,99 @@ const CallPage = () => {
   const log = (...args) => console.log(`[CallPage:${isCaller ? "Caller" : "Receiver"}]`, ...args);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white relative">
-      <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover bg-black" onError={(e) => log("Remote video error:", e)} />
-      <video
-        ref={localVideoRef}
-        autoPlay
-        playsInline
-        muted
-        className="absolute bottom-24 md:bottom-6 right-6 w-48 md:w-1/4 rounded-lg border-2 border-white shadow-lg bg-black"
-        onError={(e) => log("Local video error:", e)}
-      />
-      <div className="absolute bottom-6 flex flex-wrap justify-center gap-4 p-2 bg-black bg-opacity-50 rounded-lg">
-        {/* Buttons unchanged */}
-        <button onClick={toggleMute} className={`btn btn-circle ${isMuted ? 'btn-error' : 'btn-secondary'}`}>{isMuted ? "Unmute" : "Mute"}</button>
-        <button onClick={toggleCamera} className={`btn btn-circle ${isCameraOff ? 'btn-error' : 'btn-secondary'}`}>{isCameraOff ? "Cam On" : "Cam Off"}</button>
-        <button onClick={toggleScreenShare} className="btn btn-circle btn-primary">{isScreenSharing ? "Stop" : "Share"}</button>
+  <div className="relative w-full h-screen bg-black overflow-hidden flex items-center justify-center">
+
+    {/* 🔥 Remote Video (MAIN) */}
+    <video
+      ref={remoteVideoRef}
+      autoPlay
+      playsInline
+      className="w-full h-full object-contain bg-black"
+      onError={(e) => log("Remote video error:", e)}
+    />
+
+    {/* 🔥 Local Video (Picture-in-Picture) */}
+    <video
+      ref={localVideoRef}
+      autoPlay
+      playsInline
+      muted
+      className="
+        absolute 
+        bottom-24 md:bottom-6 
+        right-4 md:right-6 
+        w-32 sm:w-40 md:w-52 
+        aspect-video 
+        rounded-xl 
+        border border-white/30 
+        shadow-lg 
+        bg-black 
+        object-cover
+      "
+    />
+
+    {/* 🔥 Controls */}
+    <div className="
+      absolute 
+      bottom-4 
+      w-full 
+      flex 
+      justify-center 
+      px-4
+    ">
+      <div className="
+        flex 
+        gap-3 
+        bg-black/60 
+        backdrop-blur-md 
+        px-4 py-2 
+        rounded-full 
+        shadow-xl
+      ">
+
+        {/* 🎤 Mute */}
+        <button
+          onClick={toggleMute}
+          className={`btn btn-circle ${isMuted ? "btn-error" : "btn-secondary"}`}
+          title={isMuted ? "Unmute" : "Mute"}
+        >
+          {isMuted ? <MicOff size={18} /> : <Mic size={18} />}
+        </button>
+
+        {/* 📷 Camera */}
+        <button
+          onClick={toggleCamera}
+          className={`btn btn-circle ${isCameraOff ? "btn-error" : "btn-secondary"}`}
+          title={isCameraOff ? "Turn Camera On" : "Turn Camera Off"}
+        >
+          {isCameraOff ? <VideoOff size={18} /> : <Video size={18} />}
+        </button>
+
+        {/* 🖥 Screen Share */}
+        <button
+          onClick={toggleScreenShare}
+          className="btn btn-circle btn-primary"
+          title={isScreenSharing ? "Stop Screen Share" : "Share Screen"}
+        >
+          <Monitor size={18} />
+        </button>
+
+        {/* ❌ End Call */}
         <button
           onClick={() => {
             log("End Call button clicked.");
             socket.emit("end-call", { callId });
-            handleEndCallRef.current(); // Use ref
+            handleEndCallRef.current();
           }}
           className="btn btn-circle btn-error"
+          title="End Call"
         >
-          End
+          <PhoneOff size={18} />
         </button>
+
       </div>
     </div>
-  );
+  </div>
+);
 };
-
 export default CallPage;
