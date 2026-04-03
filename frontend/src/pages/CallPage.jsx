@@ -238,35 +238,100 @@ const CallPage = () => {
     localStream?.getVideoTracks().forEach((t) => (t.enabled = !t.enabled));
     setIsCameraOff((p) => !p);
   };
+  const createMixedAudioStream = (micStream, screenStream) => {
+  const audioContext = new AudioContext();
+  const destination = audioContext.createMediaStreamDestination();
+
+  // 🎤 Mic audio
+  if (micStream) {
+    const micSource = audioContext.createMediaStreamSource(micStream);
+    micSource.connect(destination);
+  }
+
+  // 🖥 System audio (if available)
+  if (screenStream && screenStream.getAudioTracks().length > 0) {
+    const screenSource = audioContext.createMediaStreamSource(screenStream);
+    screenSource.connect(destination);
+  }
+
+  return destination.stream;
+};
 
   const stopScreenShare = useCallback(() => {
-    if (!localStream) return;
-    const videoTrack = localStream.getVideoTracks()[0];
-    const sender = peerRef.current?.getSenders().find((s) => s.track?.kind === "video");
-    if (sender && videoTrack) {
-        log("Reverting to camera track.");
-        sender.replaceTrack(videoTrack).catch(err => log("Error replacing track:", err));
-    } else { log("Could not find sender/track to revert screen share.") }
-    screenStream?.getTracks().forEach((t) => t.stop());
-    setScreenStream(null);
-    setIsScreenSharing(false);
-  }, [localStream, screenStream]);
+  if (!localStream) return;
+
+  const videoTrack = localStream.getVideoTracks()[0];
+  const audioTrack = localStream.getAudioTracks()[0];
+
+  const senderVideo = peerRef.current
+    ?.getSenders()
+    .find((s) => s.track?.kind === "video");
+
+  const senderAudio = peerRef.current
+    ?.getSenders()
+    .find((s) => s.track?.kind === "audio");
+
+  // 🎥 Restore camera
+  if (senderVideo && videoTrack) {
+    senderVideo.replaceTrack(videoTrack);
+  }
+
+  // 🎤 Restore mic (no mixing anymore)
+  if (senderAudio && audioTrack) {
+    senderAudio.replaceTrack(audioTrack);
+  }
+
+  screenStream?.getTracks().forEach((t) => t.stop());
+
+  setScreenStream(null);
+  setIsScreenSharing(false);
+}, [localStream, screenStream]);
 
    const toggleScreenShare = async () => {
-    if (!isScreenSharing) {
-      try {
-        const screen = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const sender = peerRef.current?.getSenders().find((s) => s.track?.kind === "video");
-        if (sender) sender.replaceTrack(screen.getVideoTracks()[0]);
-        screen.getVideoTracks()[0].onended = () => stopScreenShare();
-        setScreenStream(screen);
-        setIsScreenSharing(true);
-      } catch (err) {
-        console.error("Error sharing screen:", err);
-        toast.error("Could not start screen sharing.");
+  if (!isScreenSharing) {
+    try {
+      const screen = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true, // 🔥 capture system audio
+      });
+
+      const videoTrack = screen.getVideoTracks()[0];
+
+      const senderVideo = peerRef.current
+        ?.getSenders()
+        .find((s) => s.track?.kind === "video");
+
+      const senderAudio = peerRef.current
+        ?.getSenders()
+        .find((s) => s.track?.kind === "audio");
+
+      // 🎛 MIX MIC + SYSTEM AUDIO
+      const mixedAudioStream = createMixedAudioStream(localStream, screen);
+      const mixedAudioTrack = mixedAudioStream.getAudioTracks()[0];
+
+      // 🎥 Replace video track
+      if (senderVideo && videoTrack) {
+        senderVideo.replaceTrack(videoTrack);
       }
-    } else stopScreenShare();
-  };
+
+      // 🔊 Replace with MIXED audio
+      if (senderAudio && mixedAudioTrack) {
+        senderAudio.replaceTrack(mixedAudioTrack);
+      }
+
+      // Auto stop when user stops sharing
+      videoTrack.onended = () => stopScreenShare();
+
+      setScreenStream(screen);
+      setIsScreenSharing(true);
+    } catch (err) {
+      console.error("Error sharing screen:", err);
+      toast.error("Could not start screen sharing.");
+    }
+  } else {
+    stopScreenShare();
+  }
+};
 
   // Helper log function for context
   const log = (...args) => console.log(`[CallPage:${isCaller ? "Caller" : "Receiver"}]`, ...args);
