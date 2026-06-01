@@ -3,8 +3,17 @@ import useAuthUser from "../hooks/useAuthUser";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
 import { completeOnboarding } from "../lib/api";
-import { LoaderIcon, MapPinIcon, Globe, ShuffleIcon } from "lucide-react";
+import { LoaderIcon, MapPinIcon, Globe, ShuffleIcon, CameraIcon } from "lucide-react";
 import { LANGUAGES } from "../constants";
+
+// DiceBear avatar styles — all free, no sign-up, stable CDN.
+// Feel free to add/remove styles from this list.
+
+
+function getRandomAvatar() {
+  const seed = Math.random().toString(36).substring(2, 10); // random 8-char seed
+  return `https://api.dicebear.com/10.x/dylan/svg?seed=${seed}`;
+}
 
 const OnboardingPage = () => {
   const { authUser } = useAuthUser();
@@ -33,14 +42,11 @@ const OnboardingPage = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
     onboardingMutation(formState);
   };
 
   const handleRandomAvatar = () => {
-    const idx = Math.floor(Math.random() * 100) + 1; // 1-100 included
-    const randomAvatar = `https://avatar.iran.liara.run/public/${idx}.png`;
-
+    const randomAvatar = getRandomAvatar();
     setFormState({ ...formState, profilePic: randomAvatar });
     toast.success("Random profile picture generated!");
   };
@@ -169,7 +175,6 @@ const OnboardingPage = () => {
             </div>
 
             {/* SUBMIT BUTTON */}
-
             <button className="btn btn-primary w-full" disabled={isPending} type="submit">
               {!isPending ? (
                 <>

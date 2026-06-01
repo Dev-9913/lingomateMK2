@@ -1,10 +1,16 @@
-
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 import prisma from "../lib/db.js";
 
-
+// Generates a stable DiceBear avatar URL from a seed string.
+// Uses the "bottts" style — works great as a user avatar, no sign-up required,
+// free CDN at api.dicebear.com.
+// Other style options you can swap in: "avataaars", "personas", "lorelei", "micah"
+function generateAvatar(seed) {
+  const encoded = encodeURIComponent(seed);
+  return `https://api.dicebear.com/10.x/dylan/svg?seed=${encoded}`;
+}
 
 export async function signup(req, res) {
   const { email, password, fullName } = req.body;
@@ -30,14 +36,17 @@ export async function signup(req, res) {
     if (existingUser) {
       return res.status(400).json({ message: "Email already exists" });
     }
-    const idx = Math.floor(Math.random() * 60)+1;
-    const randomAvatar = `https://avatar.iran.liara.run/public/430/${idx}.png`;
+
+    // Use the user's email as the seed so the avatar is consistent
+    // even if the user logs out and back in before onboarding.
+    const randomAvatar = generateAvatar(email);
+
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
     const newUser = await prisma.user.create({
       data: {
         email,
-        password:hashedPassword,
+        password: hashedPassword,
         fullName,
         profilePic: randomAvatar,
       },
@@ -46,7 +55,7 @@ export async function signup(req, res) {
     // The JWT is signed with the user's ID and email, and expires in 7 days.
     // The JWT is then set as a cookie in the response.
     // The cookie is set to expire in 7 days, is HTTP-only, and has the SameSite attribute set to "strict".
-    
+
     const token = jwt.sign(
       { id: newUser.id, email: newUser.email },
       process.env.JWT_SECRET,
@@ -54,8 +63,8 @@ export async function signup(req, res) {
     );
     res.cookie("jwt", token, {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        httpOnly: true,
-        sameSite: "strict",
+      httpOnly: true,
+      sameSite: "strict",
         secure: process.env.NODE_ENV === "production", // Set to true if using HTTPS
   })
 
@@ -69,6 +78,7 @@ export async function signup(req, res) {
     
   }
 }
+
 export async function login(req, res) {
   const { email, password } = req.body;
 
@@ -145,7 +155,7 @@ export async function onboard(req, res) {
     const userId = req.user.id;
     const {fullName,bio,nativeLanguage,learningLanguage,location} = req.body;
     if (!fullName || !bio || !nativeLanguage || !learningLanguage || !location) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: "All fields are required",
         missingFields: [
           !fullName&&"fullName",
@@ -154,7 +164,7 @@ export async function onboard(req, res) {
           !learningLanguage&&"learningLanguage",
           !location&&"location",
         ].filter(Boolean),
-       });
+      });
     }
     const updatedUser = await prisma.user.update({
       where: { id: userId },
@@ -168,5 +178,5 @@ export async function onboard(req, res) {
   } catch (error) {
     console.error("Error in onboard controller", error);
     res.status(500).json({ message: "Internal server error" });
-    
-  }};
+  }
+}
