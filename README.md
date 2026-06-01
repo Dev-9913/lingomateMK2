@@ -1,5 +1,4 @@
 ````md
-<div align="center">
 
 # 🌐 LingoMate MK2
 
@@ -14,7 +13,6 @@ A full-stack real-time language exchange platform that combines messaging, AI-po
 ![Socket.IO](https://img.shields.io/badge/Socket.IO-Real--Time-black?style=for-the-badge&logo=socket.io)
 ![WebRTC](https://img.shields.io/badge/WebRTC-P2P%20Video-blue?style=for-the-badge)
 
-</div>
 
 ---
 
